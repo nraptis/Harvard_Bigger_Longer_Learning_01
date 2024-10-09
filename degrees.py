@@ -55,31 +55,21 @@ def main():
     
     if len(sys.argv) > 2:
         sys.exit("Usage: python degrees.py [directory]")
-    directory = sys.argv[1] if len(sys.argv) == 2 else "small"
+    directory = sys.argv[1] if len(sys.argv) == 2 else "large"
 
     # Load data from files into memory
-    print("Loading data...")
     load_data(directory)
-    print("Data loaded.")
-
-
-    print("Names has ", len(names))
-    print("People has ", len(people))
-    print("Movies had ", len(movies))
-    print("Example \"names\": ", names["tom cruise"])
-    print("Example \"people\": ", people["163"])
-    print("Example \"movies\"", movies["112384"])
-
-    for tom in names["tom cruise"]:
-        naybs = neighbors_for_person(tom)
-        print(naybs)
         
     buildGraph()
 
-    source = "kevin bacon" #person_id_for_name(input("Name: "))
+    #source = person_id_for_name(input("Name: "))
+    source = person_id_for_name("miley cyrus")
+
     if source is None:
         sys.exit("Person not found.")
-    target = "tom hanks" #person_id_for_name(input("Name: "))
+    #target = "dustin hoffman" #person_id_for_name(input("Name: "))
+    target = person_id_for_name("danny glover")# #person_id_for_name(input("Name: "))
+    
     if target is None:
         sys.exit("Person not found.")
 
@@ -101,30 +91,124 @@ def main():
 class Node:
     def __init__(self, person_id: str):
         self.person_id = person_id
-        self.g_cost = int(0)
-        self.f_cost = int(0)
+        self.cost = int(100000000)
         self.index = 0
         self.connections = []
         self.existing = set()
+        self.path_previous_node = None
+        self.path_via_movie = None
 
     # Add a connection (another PathNode)
     def add_connection(self, movie_id: str, destination: Node):
         if (movie_id, destination.person_id) not in self.existing:
-            self.existing.add((movie_id, destination.person_id))
-            self.connections.append(Connection(self, movie_id, destination))
-
-    # Define less-than operator based on hCost
+            if destination.person_id != self.person_id:
+                self.existing.add((movie_id, destination.person_id))
+                self.connections.append(Connection(self, movie_id, destination))
+                
+     # Define less-than operator based on hCost
     def __lt__(self, other: Node) -> bool:
         return self.h_cost < other.h_cost
     
     def __hash__(self) -> int:
         return hash(self.person_id)
-    
+
 class Connection:
     def __init__(self, source: Node, movie_id: str, destination: Node):
         self.source = source
         self.movie_id = movie_id
         self.destination = destination
+
+class MinIndexedHeap:
+    def __init__(self):
+        self.data = []
+        self.count = 0
+
+    def insert(self, element):
+        if element is not None:
+            if self.count < len(self.data):
+                self.data[self.count] = element
+            else:
+                self.data.append(element)
+
+            self.data[self.count].index = self.count
+            bubble = self.count
+            parent = (bubble - 1) >> 1
+            self.count += 1
+
+            while bubble > 0:
+                if self.data[bubble].cost < self.data[parent].cost:
+                    self.data[bubble], self.data[parent] = self.data[parent], self.data[bubble]
+                    self.data[bubble].index, self.data[parent].index = self.data[parent].index, self.data[bubble].index
+                    bubble = parent
+                    parent = (bubble - 1) >> 1
+                else:
+                    break
+
+    def pop(self):
+        if self.count > 0:
+            result = self.data[0]
+            self.count -= 1
+            self.data[0] = self.data[self.count]
+            self.data[0].index = 0
+
+            bubble = 0
+            left_child = 1
+            right_child = 2
+            while left_child < self.count:
+                min_child = left_child
+                if right_child < self.count and self.data[right_child].cost < self.data[left_child].cost:
+                    min_child = right_child
+                if self.data[bubble].cost > self.data[min_child].cost:
+                    self.data[bubble], self.data[min_child] = self.data[min_child], self.data[bubble]
+                    self.data[bubble].index, self.data[min_child].index = self.data[min_child].index, self.data[bubble].index
+                    bubble = min_child
+                    left_child = bubble * 2 + 1
+                    right_child = left_child + 1
+                else:
+                    break
+            return result
+        return None
+
+    def is_empty(self):
+        return self.count == 0
+
+    def remove(self, element):
+        self.remove_at(element.index)
+
+    def remove_at(self, index):
+        new_count = self.count - 1
+        if index != new_count:
+            self.data[index], self.data[new_count] = self.data[new_count], self.data[index]
+            self.data[index].index, self.data[new_count].index = self.data[new_count].index, self.data[index].index
+            bubble = index
+            left_child = bubble * 2 + 1
+            right_child = left_child + 1
+            while left_child < new_count:
+                min_child = left_child
+                if right_child < new_count and self.data[right_child].cost < self.data[left_child].cost:
+                    min_child = right_child
+                if self.data[bubble].cost > self.data[min_child].cost:
+                    self.data[bubble], self.data[min_child] = self.data[min_child], self.data[bubble]
+                    self.data[bubble].index, self.data[min_child].index = self.data[min_child].index, self.data[bubble].index
+                    bubble = min_child
+                    left_child = bubble * 2 + 1
+                    right_child = left_child + 1
+                else:
+                    break
+
+            bubble = index
+            parent = (bubble - 1) >> 1
+            while bubble > 0:
+                if self.data[bubble].cost < self.data[parent].cost:
+                    self.data[bubble], self.data[parent] = self.data[parent], self.data[bubble]
+                    self.data[bubble].index, self.data[parent].index = self.data[parent].index, self.data[bubble].index
+                    bubble = parent
+                    parent = (bubble - 1) >> 1
+                else:
+                    break
+
+        self.count = new_count
+        return self.data[new_count]
 
 def neighbors_for_person(person_id):
     """
@@ -142,12 +226,39 @@ def neighbors_for_person(person_id):
 nodes = {}
 
 def buildGraph():
+
+    for person_id in people:
+        if person_id not in nodes:
+            node = Node(person_id)
+            nodes[person_id] = node
+
+    for person_id in people:
+        source = nodes[person_id]
+        for neighbor in neighbors_for_person(person_id):
+            movie_id = neighbor[0]
+            if neighbor[1] in nodes:
+                destination = nodes[neighbor[1]]
+                source.add_connection(movie_id, destination)
+                
+    """
     for name in names:
         person_id = person_id_for_name(name)
         if person_id not in nodes:
-            nodes[person_id] = Node(person_id)
+            node = Node(person_id)
+            nodes[person_id] = node
+            print("PID = ", node.person_id)
+    """
 
-    print(nodes)
+    """
+    for person in people:
+        person_id = person["id"]
+        if person_id not in nodes:
+            node = Node(person_id)
+            nodes[person_id] = node
+            print("PID = ", node.person_id)
+
+    
+
 
     for name in names:
         person_id = person_id_for_name(name)
@@ -157,31 +268,23 @@ def buildGraph():
             if neighbor[1] in nodes:
                 destination = nodes[neighbor[1]]
                 source.add_connection(movie_id, destination)
-                print(source.connections)
+    """
 
-    
-    testA = Node("a")
-    testB = Node("b")
-    testC = Node("c")
-    testD = Node("b")
+def make_path(target):
+    current = target
+    result = []
 
-    testA.add_connection("jaws", testB)
-    print("a cons 1.0 => ", testA.connections)
+    while True:
+        if current == None:
+            break
+        if current.path_via_movie == None:
+            break
+        result.append([current.path_via_movie, current.person_id])
+        current = current.path_previous_node
 
-    testA.add_connection("jaws", testB)
-    print("a cons 1.1 => ", testA.connections)
+    result.reverse()
 
-    testA.add_connection("jaws", testC)
-    print("a cons 1.2 => ", testA.connections)
-
-    testA.add_connection("jaws", testB)
-    print("a cons 2.0 => ", testA.connections)
-
-    testA.add_connection("jaws", testB)
-    print("a cons 2.1 => ", testA.connections)
-
-    testA.add_connection("jaws", testC)
-    print("a cons 2.2 => ", testA.connections)
+    return result
 
 
 def shortest_path(source, target):
@@ -192,15 +295,64 @@ def shortest_path(source, target):
     If no possible path, returns None.
     """
 
-    # TODO
-    raise NotImplementedError
+    source_person_id = source
+    target_person_id = target
+
+    if source_person_id in nodes and target_person_id in nodes:
+        sourceNode = nodes[source_person_id]
+        targetNode = nodes[target_person_id]
+
+        sourceNode.cost = 0
+        sourceNode.path_previous_node = None
+        sourceNode.path_via_movie = None
+
+        openSet = set()
+        closedSet = set()
+        
+        openHeap = MinIndexedHeap()
+
+        openSet.add(sourceNode)
+
+        openHeap.insert(sourceNode)
+
+        while not openHeap.is_empty():
+
+            current = openHeap.pop()
+            if current == targetNode:
+                return make_path(targetNode)
+
+            openSet.discard(current)
+            closedSet.add(current)
+
+            for connection in current.connections:
+                
+                destination = connection.destination
+                if destination not in closedSet:
+                    
+                    cost = current.cost + 1
+                    if cost < destination.cost:
+                        destination.cost = cost
+
+                        destination.path_previous_node = current
+                        destination.path_via_movie = connection.movie_id
+
+                    if destination in openSet:
+                        openHeap.remove(destination)
+                        openHeap.insert(destination)
+                    else:
+                        openSet.add(destination)
+                        openHeap.insert(destination)
+
+    return None
 
 
 def person_id_for_name(name):
+    
     """
     Returns the IMDB id for a person's name,
     resolving ambiguities as needed.
     """
+
     person_ids = list(names.get(name.lower(), set()))
     if len(person_ids) == 0:
         return None
@@ -232,96 +384,3 @@ if __name__ == "__main__":
 
 
     
-
-class MaxIndexedHeap:
-    def __init__(self):
-        self.data = []
-        self.count = 0
-
-    def insert(self, element):
-        if element is not None:
-            if self.count < len(self.data):
-                self.data[self.count] = element
-            else:
-                self.data.append(element)
-
-            self.data[self.count].index = self.count
-            bubble = self.count
-            parent = (bubble - 1) >> 1
-            self.count += 1
-
-            while bubble > 0:
-                if self.data[bubble] > self.data[parent]:
-                    self.data[bubble], self.data[parent] = self.data[parent], self.data[bubble]
-                    self.data[bubble].index, self.data[parent].index = self.data[parent].index, self.data[bubble].index
-                    bubble = parent
-                    parent = (bubble - 1) >> 1
-                else:
-                    break
-
-    def peek(self):
-        if self.count > 0:
-            return self.data[0]
-        return None
-
-    def pop(self):
-        if self.count > 0:
-            result = self.data[0]
-            self.count -= 1
-            self.data[0] = self.data[self.count]
-            self.data[0].index = 0
-            bubble = 0
-            left_child = 1
-            right_child = 2
-            while left_child < self.count:
-                max_child = left_child
-                if right_child < self.count and self.data[right_child] > self.data[left_child]:
-                    max_child = right_child
-                if self.data[bubble] < self.data[max_child]:
-                    self.data[bubble], self.data[max_child] = self.data[max_child], self.data[bubble]
-                    self.data[bubble].index, self.data[max_child].index = self.data[max_child].index, self.data[bubble].index
-                    bubble = max_child
-                    left_child = bubble * 2 + 1
-                    right_child = left_child + 1
-                else:
-                    break
-            return result
-        return None
-
-    def remove(self, element):
-        self.remove_at(element.index)
-
-    def remove_at(self, index):
-        new_count = self.count - 1
-        if index != new_count:
-            self.data[index], self.data[new_count] = self.data[new_count], self.data[index]
-            self.data[index].index, self.data[new_count].index = self.data[new_count].index, self.data[index].index
-            bubble = index
-            left_child = bubble * 2 + 1
-            right_child = left_child + 1
-            while left_child < new_count:
-                max_child = left_child
-                if right_child < new_count and self.data[right_child] > self.data[left_child]:
-                    max_child = right_child
-                if self.data[bubble] < self.data[max_child]:
-                    self.data[bubble], self.data[max_child] = self.data[max_child], self.data[bubble]
-                    self.data[bubble].index, self.data[max_child].index = self.data[max_child].index, self.data[bubble].index
-                    bubble = max_child
-                    left_child = bubble * 2 + 1
-                    right_child = left_child + 1
-                else:
-                    break
-
-            bubble = index
-            parent = (bubble - 1) >> 1
-            while bubble > 0:
-                if self.data[bubble] > self.data[parent]:
-                    self.data[bubble], self.data[parent] = self.data[parent], self.data[bubble]
-                    self.data[bubble].index, self.data[parent].index = self.data[parent].index, self.data[bubble].index
-                    bubble = parent
-                    parent = (bubble - 1) >> 1
-                else:
-                    break
-
-        self.count = new_count
-        return self.data[self.count]
