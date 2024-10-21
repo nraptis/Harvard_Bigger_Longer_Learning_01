@@ -104,13 +104,6 @@ class Node:
             if destination.person_id != self.person_id:
                 self.existing.add((movie_id, destination.person_id))
                 self.connections.append(Connection(self, movie_id, destination))
-                
-     # Define less-than operator based on hCost
-    def __lt__(self, other: Node) -> bool:
-        return self.h_cost < other.h_cost
-    
-    def __hash__(self) -> int:
-        return hash(self.person_id)
 
 class Connection:
     def __init__(self, source: Node, movie_id: str, destination: Node):
@@ -150,7 +143,6 @@ class MinIndexedHeap:
             self.count -= 1
             self.data[0] = self.data[self.count]
             self.data[0].index = 0
-
             bubble = 0
             left_child = 1
             right_child = 2
@@ -239,36 +231,6 @@ def buildGraph():
             if neighbor[1] in nodes:
                 destination = nodes[neighbor[1]]
                 source.add_connection(movie_id, destination)
-                
-    """
-    for name in names:
-        person_id = person_id_for_name(name)
-        if person_id not in nodes:
-            node = Node(person_id)
-            nodes[person_id] = node
-            print("PID = ", node.person_id)
-    """
-
-    """
-    for person in people:
-        person_id = person["id"]
-        if person_id not in nodes:
-            node = Node(person_id)
-            nodes[person_id] = node
-            print("PID = ", node.person_id)
-
-    
-
-
-    for name in names:
-        person_id = person_id_for_name(name)
-        source = nodes[person_id]
-        for neighbor in neighbors_for_person(person_id):
-            movie_id = neighbor[0]
-            if neighbor[1] in nodes:
-                destination = nodes[neighbor[1]]
-                source.add_connection(movie_id, destination)
-    """
 
 def make_path(target):
     current = target
