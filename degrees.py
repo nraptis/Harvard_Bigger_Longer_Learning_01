@@ -12,6 +12,9 @@ people = {}
 # Maps movie_ids to a dictionary of: title, year, stars (a set of person_ids)
 movies = {}
 
+# Maps (person_id, movie_id) to a path object
+nodes = {}
+
 def load_data(directory):
     """
     Load data from CSV files into memory.
@@ -52,24 +55,21 @@ def load_data(directory):
 
 
 def main():
-    
     if len(sys.argv) > 2:
         sys.exit("Usage: python degrees.py [directory]")
     directory = sys.argv[1] if len(sys.argv) == 2 else "large"
 
     # Load data from files into memory
+    print("Loading data... ", directory)
     load_data(directory)
-        
+    print("Data loaded.")
+
     buildGraph()
 
-    #source = person_id_for_name(input("Name: "))
-    source = person_id_for_name("miley cyrus")
-
+    source = person_id_for_name(input("Name: "))
     if source is None:
         sys.exit("Person not found.")
-    #target = "dustin hoffman" #person_id_for_name(input("Name: "))
-    target = person_id_for_name("danny glover")# #person_id_for_name(input("Name: "))
-    
+    target = person_id_for_name(input("Name: "))
     if target is None:
         sys.exit("Person not found.")
 
@@ -87,6 +87,122 @@ def main():
             movie = movies[path[i + 1][0]]["title"]
             print(f"{i + 1}: {person1} and {person2} starred in {movie}")
 
+
+def buildGraph():
+
+    for person_id in people:
+        if person_id not in nodes:
+            node = Node(person_id)
+            nodes[person_id] = node
+
+    for person_id in people:
+        source = nodes[person_id]
+        for neighbor in neighbors_for_person(person_id):
+            movie_id = neighbor[0]
+            if neighbor[1] in nodes:
+                destination = nodes[neighbor[1]]
+                source.add_connection(movie_id, destination)
+
+def make_path(target):
+    current = target
+    result = []
+
+    while True:
+        if current == None:
+            break
+        if current.path_via_movie == None:
+            break
+        result.append([current.path_via_movie, current.person_id])
+        current = current.path_previous_node
+
+    result.reverse()
+
+    return result
+
+
+def shortest_path(source, target):
+    """
+    Returns the shortest list of (movie_id, person_id) pairs
+    that connect the source to the target.
+
+    If no possible path, returns None.
+    """
+
+    source_person_id = source
+    target_person_id = target
+
+    if source_person_id in nodes and target_person_id in nodes:
+        sourceNode = nodes[source_person_id]
+        targetNode = nodes[target_person_id]
+
+        sourceNode.cost = 0
+        sourceNode.path_previous_node = None
+        sourceNode.path_via_movie = None
+
+        openSet = set()
+        closedSet = set()
+        
+        openHeap = MinIndexedHeap()
+
+        openSet.add(sourceNode)
+
+        openHeap.insert(sourceNode)
+
+        while not openHeap.is_empty():
+
+            current = openHeap.pop()
+            if current == targetNode:
+                return make_path(targetNode)
+
+            openSet.discard(current)
+            closedSet.add(current)
+
+            for connection in current.connections:
+                
+                destination = connection.destination
+                if destination not in closedSet:
+                    
+                    cost = current.cost + 1
+                    if cost < destination.cost:
+                        destination.cost = cost
+
+                        destination.path_previous_node = current
+                        destination.path_via_movie = connection.movie_id
+
+                    if destination in openSet:
+                        openHeap.remove(destination)
+                        openHeap.insert(destination)
+                    else:
+                        openSet.add(destination)
+                        openHeap.insert(destination)
+
+    return None
+
+
+def person_id_for_name(name):
+    """
+    Returns the IMDB id for a person's name,
+    resolving ambiguities as needed.
+    """
+    person_ids = list(names.get(name.lower(), set()))
+    if len(person_ids) == 0:
+        return None
+    elif len(person_ids) > 1:
+        print(f"Which '{name}'?")
+        for person_id in person_ids:
+            person = people[person_id]
+            name = person["name"]
+            birth = person["birth"]
+            print(f"ID: {person_id}, Name: {name}, Birth: {birth}")
+        try:
+            person_id = input("Intended Person ID: ")
+            if person_id in person_ids:
+                return person_id
+        except ValueError:
+            pass
+        return None
+    else:
+        return person_ids[0]
 
 class Node:
     def __init__(self, person_id: str):
@@ -201,7 +317,7 @@ class MinIndexedHeap:
 
         self.count = new_count
         return self.data[new_count]
-
+    
 def neighbors_for_person(person_id):
     """
     Returns (movie_id, person_id) pairs for people
@@ -214,135 +330,6 @@ def neighbors_for_person(person_id):
             neighbors.add((movie_id, person_id))
     return neighbors
 
-# Maps (person_id, movie_id) to a path object
-nodes = {}
-
-def buildGraph():
-
-    for person_id in people:
-        if person_id not in nodes:
-            node = Node(person_id)
-            nodes[person_id] = node
-
-    for person_id in people:
-        source = nodes[person_id]
-        for neighbor in neighbors_for_person(person_id):
-            movie_id = neighbor[0]
-            if neighbor[1] in nodes:
-                destination = nodes[neighbor[1]]
-                source.add_connection(movie_id, destination)
-
-def make_path(target):
-    current = target
-    result = []
-
-    while True:
-        if current == None:
-            break
-        if current.path_via_movie == None:
-            break
-        result.append([current.path_via_movie, current.person_id])
-        current = current.path_previous_node
-
-    result.reverse()
-
-    return result
-
-
-def shortest_path(source, target):
-    """
-    Returns the shortest list of (movie_id, person_id) pairs
-    that connect the source to the target.
-
-    If no possible path, returns None.
-    """
-
-    source_person_id = source
-    target_person_id = target
-
-    if source_person_id in nodes and target_person_id in nodes:
-        sourceNode = nodes[source_person_id]
-        targetNode = nodes[target_person_id]
-
-        sourceNode.cost = 0
-        sourceNode.path_previous_node = None
-        sourceNode.path_via_movie = None
-
-        openSet = set()
-        closedSet = set()
-        
-        openHeap = MinIndexedHeap()
-
-        openSet.add(sourceNode)
-
-        openHeap.insert(sourceNode)
-
-        while not openHeap.is_empty():
-
-            current = openHeap.pop()
-            if current == targetNode:
-                return make_path(targetNode)
-
-            openSet.discard(current)
-            closedSet.add(current)
-
-            for connection in current.connections:
-                
-                destination = connection.destination
-                if destination not in closedSet:
-                    
-                    cost = current.cost + 1
-                    if cost < destination.cost:
-                        destination.cost = cost
-
-                        destination.path_previous_node = current
-                        destination.path_via_movie = connection.movie_id
-
-                    if destination in openSet:
-                        openHeap.remove(destination)
-                        openHeap.insert(destination)
-                    else:
-                        openSet.add(destination)
-                        openHeap.insert(destination)
-
-    return None
-
-
-def person_id_for_name(name):
-    
-    """
-    Returns the IMDB id for a person's name,
-    resolving ambiguities as needed.
-    """
-
-    person_ids = list(names.get(name.lower(), set()))
-    if len(person_ids) == 0:
-        return None
-    elif len(person_ids) > 1:
-        print(f"Which '{name}'?")
-        for person_id in person_ids:
-            person = people[person_id]
-            name = person["name"]
-            birth = person["birth"]
-            print(f"ID: {person_id}, Name: {name}, Birth: {birth}")
-        try:
-            person_id = input("Intended Person ID: ")
-            if person_id in person_ids:
-                return person_id
-        except ValueError:
-            pass
-        return None
-    else:
-        return person_ids[0]
-
-
-
-
 
 if __name__ == "__main__":
     main()
-    
-
-
-
-    
